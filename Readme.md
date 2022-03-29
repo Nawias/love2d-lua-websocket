@@ -1,6 +1,9 @@
-# websocket client pure lua implement for love2d
+# websocket client pure lua implement for love2d and lovepotion
 
 Event-driven websocket client for love2d in pure lua, which aims to be simple and easy to use.
+Adjusted to work for lovepotion on Nintendo 3DS (not tested on switch):
+* Bitwise operations done using luabit.lua from [lua-msgpack](https://github.com/kengonakajima/lua-msgpack)
+* goto replaced with a janky while-do loop
 
 Not all websocket features are implemented, but it works fine. Tested with aiohttp(python) and ws(nodejs) library.
 
