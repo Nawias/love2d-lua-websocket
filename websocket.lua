@@ -13,10 +13,10 @@ usage:
     end
 ]]
 
-local socket = require"socket"
-local bit = require"bit"
+local socket = require("socket")
+local bit = require("luabit")
 local band, bor, bxor = bit.band, bit.bor, bit.bxor
-local shl, shr = bit.lshift, bit.rshift
+local shl, shr = bit.blshift, bit.blogicrshift
 local seckey = "osT3F7mvlojIvf3/8uIsJQ=="
 
 local OPCODE = {
@@ -118,6 +118,64 @@ end
 ---@return string|nil err error message
 function _M:read()
     local res, err, part
+    local gotoReceive = true
+
+    while gotoReceive do
+        gotoReceive = false
+        res, err, part = self.socket:receive(self._length-#self._buffer)
+        if err=="closed" then return nil, nil, err end
+        if part or res then
+            self._buffer = self._buffer..(part or res)
+        else
+            return nil, nil, nil
+        end
+        if not self._head then
+            if #self._buffer<2 then
+                return nil, nil, "buffer length less than 2"
+            end
+            local length = band(self._buffer:byte(2), 0x7f)
+            if length==126 then
+                if self._length==2 then self._length = 4 gotoReceive = true
+                else
+                    if #self._buffer<4 then
+                        return nil, nil, "buffer length less than 4"
+                    end
+                    local b1, b2 = self._buffer:byte(3, 4)
+                    self._length = shl(b1, 8) + b2
+                end
+
+            elseif length==127 and not gotoReceive then
+                if self._length==2 then self._length = 10 gotoReceive = true
+                else
+                    if #self._buffer<10 then
+                        return nil, nil, "buffer length less than 10"
+                    end
+                    local b5, b6, b7, b8 = self._buffer:byte(7, 10)
+                    self._length = shl(b5, 24) + shl(b6, 16) + shl(b7, 8) + b8
+                end
+
+            elseif not gotoReceive then
+                self._length = length
+            end
+            if not gotoReceive then
+                self._head, self._buffer = self._buffer:byte(1), ""
+                if length>0 then gotoReceive = true end
+            end
+        end
+        if not gotoReceive then
+            if #self._buffer>=self._length then
+                local ret, head = self._buffer, self._head
+                self._length, self._buffer, self._head = 2, "", nil
+                return ret, head, nil
+            else
+                return nil, nil, "buffer length less than "..self._length
+            end
+        end
+    end
+end
+--[[
+function _M:reads()
+    local res, err, part
     ::RECIEVE::
     res, err, part = self.socket:receive(self._length-#self._buffer)
     if err=="closed" then return nil, nil, err end
@@ -159,6 +217,7 @@ function _M:read()
         return nil, nil, "buffer length less than "..self._length
     end
 end
+--]]
 
 ---send a message
 ---@param message string
